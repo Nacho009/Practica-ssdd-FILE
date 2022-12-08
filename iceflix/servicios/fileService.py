@@ -2,10 +2,13 @@
 
 
 from hashlib import sha256
+from random import choice
 import sys
 import os
 import logging
+
 import uuid
+from main import * 
 
 import Ice
 
@@ -13,9 +16,16 @@ Ice.loadSlice("../Iceflix.ice")
 import IceFlix
 
 
-servidorId=uuid.uuid4() # cambiar
+servidorId=uuid.uuid4()
 
 class FileServiceI (IceFlix.FileService):
+
+     def __init__(self):
+
+        self.autenticator = Main().getAuthenticator
+        self.files={}
+
+        
 
     #Comprueba si existe ese archivo en el directorio recursos.
 
@@ -26,11 +36,16 @@ class FileServiceI (IceFlix.FileService):
                     return True
             return False
 
-    
-    # ELIMINA UN FICHERO
+     def openFile(self, file_id, user_token, current=None):
+        path=self.files[file_id]
+        if not self.authenticator.isAuthorized(user_token):
+            raise IceFlix.Unauthorized()
+        elif not self.exist(file_id):
+            raise IceFlix.WrongMediaId()
 
+    
+    
      def deleteFile(self, file_id, admin_token, current=None):
-        """Borra un vídeo del directorio resources"""
        
         if not self.authenticator.isAdmin(admin_token):
             raise IceFlix.Unauthorized()
@@ -48,11 +63,3 @@ class FileServiceI (IceFlix.FileService):
         logging.info(f"Fichero ---> {file_id} eliminado.")
         self.Catalog.MediaCatalog.removedMedia(file_id, servidorId)
 
-#CODIGO openFile que se puso en clase
-    
-    # def openFile(self, file_id, user_token, current):
-    #     path=self.files[file_id]
-    #     fh=FileHandler(path)
-    #     prx=current.adapter.addWithUUID(fh)
-    #     return IceFlix.FileServicePrx.uncheckedCast(fh)
-    # Ice.Current()
