@@ -9,7 +9,7 @@ import logging
 
 import uuid
 from main import * 
-
+#Importar catalogo
 import Ice
 
 Ice.loadSlice("../Iceflix.ice")
@@ -21,12 +21,10 @@ servidorId=uuid.uuid4()
 class FileServiceI (IceFlix.FileService):
 
      def __init__(self):
-
-        self.autenticator = Main().getAuthenticator
+        self.authenticator= Main.getAuthenticator
+        # self.catalog= Catalog
         self.files={}
-
         
-
     #Comprueba si existe ese archivo en el directorio recursos.
 
      def exist(self, file_id, current=None):
@@ -37,12 +35,18 @@ class FileServiceI (IceFlix.FileService):
             return False
 
      def openFile(self, file_id, user_token, current=None):
+        
         path=self.files[file_id]
+
         if not self.authenticator.isAuthorized(user_token):
             raise IceFlix.Unauthorized()
-        elif not self.exist(file_id):
-            raise IceFlix.WrongMediaId()
 
+        if not self.exist(file_id):
+            raise IceFlix.WrongMediaId()
+        else:
+            file_handler= FileHandler(path)
+            prx_handler=current.adapter.addWithUUID(file_handler)
+            return IceFlix.FileServicePrx.uncheckedCast(prx_handler)
     
     
      def deleteFile(self, file_id, admin_token, current=None):
@@ -63,3 +67,9 @@ class FileServiceI (IceFlix.FileService):
         logging.info(f"Fichero ---> {file_id} eliminado.")
         self.Catalog.MediaCatalog.removedMedia(file_id, servidorId)
 
+class FileHandler():
+    def receive():
+        return 0
+
+    def close():
+        return 0
