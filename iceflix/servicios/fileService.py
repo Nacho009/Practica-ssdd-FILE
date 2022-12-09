@@ -35,7 +35,7 @@ class FileServiceI (IceFlix.FileService):
             return False
 
      def openFile(self, file_id, user_token, current=None):
-        
+
         path=self.files[file_id]
 
         if not self.authenticator.isAuthorized(user_token):
@@ -68,8 +68,10 @@ class FileServiceI (IceFlix.FileService):
         self.Catalog.MediaCatalog.removedMedia(file_id, servidorId)
 
 class FileHandler():
-    def receive():
-        return 0
 
-    def close():
-        return 0
+    def receive(self, size, user_token, current=None):
+        if not self.authenticator.isAuthorized(user_token):
+             raise IceFlix.Unauthorized()
+
+    def close(user_token):
+        return 0 
