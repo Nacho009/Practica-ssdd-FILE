@@ -2,21 +2,22 @@
 
 
 from hashlib import sha256
+import hashlib
 from random import choice
 import sys
 import os
 import logging
 import time
-
 import uuid
-from main import * 
-#Importar catalogo
+from main import *
+#Importar catalogo 
+
 import Ice
 
 Ice.loadSlice("../Iceflix.ice")
 import IceFlix
 
-
+CHUNK_SIZE = 4096
 servidorId=uuid.uuid4()
 
 class FileServiceI (IceFlix.FileService):
@@ -26,6 +27,7 @@ class FileServiceI (IceFlix.FileService):
         # self.catalog= Catalog
         self.files={}
         
+
     #Comprueba si existe ese archivo en el directorio recursos.
 
      def exist(self, file_id, current=None):
@@ -45,12 +47,38 @@ class FileServiceI (IceFlix.FileService):
         if not self.exist(file_id):
             raise IceFlix.WrongMediaId()
         else:
-
             file_handler= FileHandler(path)
             prx_handler=current.adapter.addWithUUID(file_handler)
-
             return IceFlix.FileServicePrx.uncheckedCast(prx_handler)
-    
+
+     def uploadFile(self, file_name, uploader, admin_token, current=None):
+        
+        if not self.authenticator.isAdmin(admin_token):
+            raise IceFlix.Unauthorized()
+                
+        index = file_name.rfind("/")
+        file_name = file_name[index + 1:]
+        destination_file_name = "recursos/" + file_name
+
+        try:
+            with open(destination_file_name, 'wb') as out:
+                while True:
+                    chunk = uploader.receive(CHUNK_SIZE)
+                    if not chunk:
+                        break
+                    out.write(chunk)
+            uploader.close()
+
+            with open(destination_file_name, 'rb') as file:
+                contenido=file.read()
+                id= hashlib.sha256(contenido).hexdigest()
+
+            file.close()
+
+            self.Catalog.mediaCatalog.newMedia(id,servidorId)
+
+        except OSError: #Mirar este except
+            raise IceFlix.TemporaryUnavaible
     
      def deleteFile(self, file_id, admin_token, current=None):
        
@@ -71,26 +99,24 @@ class FileServiceI (IceFlix.FileService):
         self.Catalog.MediaCatalog.removedMedia(file_id, servidorId)
 
 class FileHandler():
-
     def receive(self, size, user_token, current=None):
         if not self.authenticator.isAuthorized(user_token):
              raise IceFlix.Unauthorized()
 
-    def close(user_token):
-        return 0 
+    def close(usertoken):
+        return
 
 class FileApp(Ice.Application):
 
     def __init__(self):
         super().__init__()
         self.servant = FileServiceI()
-        self.servId= servidorId
-        self.mainPrx = None
         self.proxy = None
         self.adapter = None
+        self.mainProxy = None
+        self.serviceId= servidorId
 
     def run(self, args):
-        """Run the application, adding the needed objects to the adapter."""
         logging.info("Running File application")
 
         comm = self.communicator()
@@ -99,14 +125,17 @@ class FileApp(Ice.Application):
 
         self.proxy = self.adapter.addWithUUID(self.servant)
 
-        self.mainPrx= comm.propertyToProxy("Main.Proxy")
+        self.mainProxy= comm.propertyToProxy("Main.Proxy")
 
         self.shutdownOnInterrupt()
         comm.waitForShutdown()
-        self.mainPrx.newService(self.proxy,self.servId)
+        self.mainProxy.newService(self.proxy,self.serviceId)
+
+        for file in os.listdir("recursos"):
+            self.Catalog.mediaCatalog.newMedia(sha256(file.encode()).hexdigest(),servidorId)
 
         while True:
             time.sleep(25.0)
-            self.mainProxy.announce(self.proxy,self.servId)
+            self.mainProxy.announce(self.proxy,self.serviceId)
 
         return 0
