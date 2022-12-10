@@ -44,8 +44,10 @@ class FileServiceI (IceFlix.FileService):
         if not self.exist(file_id):
             raise IceFlix.WrongMediaId()
         else:
+
             file_handler= FileHandler(path)
             prx_handler=current.adapter.addWithUUID(file_handler)
+
             return IceFlix.FileServicePrx.uncheckedCast(prx_handler)
     
     
@@ -75,3 +77,13 @@ class FileHandler():
 
     def close(user_token):
         return 0 
+
+class FileApp(Ice.Application):
+
+    def __init__(self):
+        super().__init__()
+        self.servant = FileServiceI()
+        self.proxy = None
+        self.adapter = None
+        self.mainProxy = None
+        self.serviceId= servidorId
