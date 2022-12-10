@@ -6,6 +6,7 @@ from random import choice
 import sys
 import os
 import logging
+import time
 
 import uuid
 from main import * 
@@ -83,7 +84,29 @@ class FileApp(Ice.Application):
     def __init__(self):
         super().__init__()
         self.servant = FileServiceI()
+        self.servId= servidorId
+        self.mainPrx = None
         self.proxy = None
         self.adapter = None
-        self.mainProxy = None
-        self.serviceId= servidorId
+
+    def run(self, args):
+        """Run the application, adding the needed objects to the adapter."""
+        logging.info("Running File application")
+
+        comm = self.communicator()
+        self.adapter = comm.createObjectAdapter("FileService")
+        self.adapter.activate()
+
+        self.proxy = self.adapter.addWithUUID(self.servant)
+
+        self.mainPrx= comm.propertyToProxy("Main.Proxy")
+
+        self.shutdownOnInterrupt()
+        comm.waitForShutdown()
+        self.mainPrx.newService(self.proxy,self.servId)
+
+        while True:
+            time.sleep(25.0)
+            self.mainProxy.announce(self.proxy,self.servId)
+
+        return 0
