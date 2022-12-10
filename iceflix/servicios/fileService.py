@@ -22,11 +22,16 @@ servidorId=uuid.uuid4()
 
 class FileServiceI (IceFlix.FileService):
 
-     def __init__(self):
+     def __init__(self,main):
         self.authenticator= Main.getAuthenticator
+        self.main=main
         # self.catalog= Catalog
         self.files={}
         
+        cont=0
+        for file in os.listdir("recursos"):
+            self.files[cont]=file
+            cont=cont+1
 
     #Comprueba si existe ese archivo en el directorio recursos.
 
@@ -104,7 +109,7 @@ class FileHandler():
              raise IceFlix.Unauthorized()
 
     def close(usertoken):
-        return
+        return 0
 
 class FileApp(Ice.Application):
 
@@ -138,4 +143,5 @@ class FileApp(Ice.Application):
             time.sleep(25.0)
             self.mainProxy.announce(self.proxy,self.serviceId)
 
-        return 0
+if __name__ == "__main__":
+    FileApp().main(sys.argv)
