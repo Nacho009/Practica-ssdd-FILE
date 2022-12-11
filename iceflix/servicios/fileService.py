@@ -26,6 +26,7 @@ class FileServiceI (IceFlix.FileService):
         self.authenticator= Main.getAuthenticator()
         self.main=main
         self.catalog= Main.getCatalog
+        self.broker=None
         self.files={}
         
         
@@ -47,7 +48,7 @@ class FileServiceI (IceFlix.FileService):
         path="recursos/"
         path+=self.files[file_id]
 
-        broker=self.communicator()
+ 
         idAdapter=str(uuid.uuid4())
         if not self.authenticator.isAuthorized(user_token):
             raise IceFlix.Unauthorized()
@@ -56,7 +57,7 @@ class FileServiceI (IceFlix.FileService):
             raise IceFlix.WrongMediaId()
         else:
 
-            file_handler= FileHandler(path,idAdapter,broker)
+            file_handler= FileHandler(path,idAdapter,self.broker)
             prx_handler=current.adapter.addWithUUID(file_handler)
             return IceFlix.FileServicePrx.uncheckedCast(prx_handler)
 
@@ -119,7 +120,7 @@ class FileHandler(IceFlix.FileHandler):
         self.file_path=path
         self.bytes=0
         self.idAdapter=idAdapter
-        self.broker=self.communicator()
+        self.broker=broker
 
     def receive(self, size, user_token, current=None):
 
@@ -159,9 +160,10 @@ class FileApp(Ice.Application):
         logging.info("Running File application")
 
         broker = self.communicator()
-        self.adapter = broker.createObjectAdapter("FileService")
+        self.adapter = broker.createObjectAdapter("FileService","tcp")
         self.adapter.activate()
-
+        
+        self.servant.broker=broker
         self.proxy = self.adapter.addWithUUID(self.servant)
 
         self.mainProxy= broker.propertyToProxy("Main.Proxy")
