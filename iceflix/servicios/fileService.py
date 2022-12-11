@@ -8,6 +8,8 @@ import os
 import logging
 import time
 import uuid
+from os import path
+import base64
 from main import *
 #import catalogo 
 
@@ -18,7 +20,6 @@ import IceFlix
 
 CHUNK_SIZE = 4096
 servidorId=uuid.uuid4()
-# contador=0
 
 class FileServiceI (IceFlix.FileService):
 
@@ -26,11 +27,8 @@ class FileServiceI (IceFlix.FileService):
         self.authenticator= Main.getAuthenticator()
         self.main=main
         self.catalog= Main.getCatalog
-        self.broker=None
         self.files={}
         
-        
-
         for file in os.listdir("recursos"):
             self.files[sha256(file.encode()).hexdigest()]=file
             
@@ -58,8 +56,9 @@ class FileServiceI (IceFlix.FileService):
             raise IceFlix.WrongMediaId()
         else:
 # El programa crea objetos de tipo FileHandler sólo cuando son necesarios, bajo demanda.
-            file_handler= FileHandler(path,idAdapter,self.broker)
+            file_handler= FileHandler(path)
             prx_handler=current.adapter.addWithUUID(file_handler)
+
             return IceFlix.FileServicePrx.uncheckedCast(prx_handler)
 
 
@@ -113,36 +112,47 @@ class FileServiceI (IceFlix.FileService):
         logging.info(f"Fichero ---> {file_id} eliminado.")
         self.catalog.MediaCatalog.removedMedia(file_id, servidorId)
      
-# El servicio permite descargar un archivo a usuarios autenticados.
-     def downloadFile(self, file_id, user_token, current=None):
+     #PREGUNTAR PROFESOR
+# # El servicio permite descargar un archivo a usuarios autenticados.
+#      def downloadFile(self, file_id, user_token, current=None):
+#         # Verificar si el archivo ya se está subiendo
+#         if file_id in self.files:
 
-        return 0
+#         # Verificar si el archivo se ha subido completamente
+#             if len(self.files[file_id]) == os.path.getsize('files/' + file_id):
+#                 # Crear un archivo en disco con el contenido del archivo subido
+#                 with open('files/' + file_id, 'wb') as f:
+#                     f.write(self.files[file_id])
+
+                
+#             else:
+#                 del self.files[file_id]
+#                 # Lanzar una excepción indicando que el archivo no se ha subido correctamente
+#                 raise IceFlix.TemporaryUnavaible
+#         else:
+#             logging.info(f"Fichero ---> {file_id} No encontrado.")
         
 class FileHandler(IceFlix.FileHandler):
 
-    # contador=contador+1
-
-    def __init__(self,path,idAdapter,broker):
+    def __init__(self,file_path):
         super().__init__()
 
         self.authenticator= Main.getAuthenticator()
-        self.file_path=path
-        self.bytes=0
-        self.idAdapter=idAdapter
-        self.broker=broker
+
+        if not path.isfile(file_path):
+             raise IceFlix.WrongMediaId()
+
+        self.destination_file = file_path
+        self.file = open(self.destination_file, 'rb')  # pylint: disable=consider-using-with
 
     def receive(self, size, user_token, current=None):
 
         if not self.authenticator.isAuthorized(user_token):
              raise IceFlix.Unauthorized()
 
-        with open(self.file_path,"rb") as out:
+        chunk = self.file.read(size)
+        return chunk
 
-            out.seek(self.bytes)
-            leido=out.read(size)
-            self.bytes=self.bytes+size
-
-            return leido
         
 
     def close(self, user_token, current=None):
@@ -150,8 +160,8 @@ class FileHandler(IceFlix.FileHandler):
          if not self.authenticator.isAuthorized(user_token):
              raise IceFlix.Unauthorized()
 
-         adapter= current.adapter
-         adapter.remove(self.broker.StringToIdentify(self.idAdapter))
+         self.file.close()
+         current.adapter.remove(current.id)
 
 
 class FileApp(Ice.Application):
