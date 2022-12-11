@@ -35,32 +35,35 @@ class FileServiceI (IceFlix.FileService):
             self.files[sha256(file.encode()).hexdigest()]=file
             
 
-    #Comprueba si existe ese archivo en el directorio recursos.
-
+#Comprueba si existe ese archivo en el directorio recursos.
      def exist(self, file_id, current=None):
 
             for file in os.listdir("recursos"):
+                # El servicio calcula los “media id” utilizando el algoritmo especificado.
                 if file_id == sha256(file.encode()).hexdigest():
                     return True
             return False
-
+# El servicio permite abrir un archivo existente a un usuario válido.
      def openFile(self, file_id, user_token, current=None):
         path="recursos/"
         path+=self.files[file_id]
 
  
         idAdapter=str(uuid.uuid4())
+
         if not self.authenticator.isAuthorized(user_token):
             raise IceFlix.Unauthorized()
 
         if not self.exist(file_id):
             raise IceFlix.WrongMediaId()
         else:
-
+# El programa crea objetos de tipo FileHandler sólo cuando son necesarios, bajo demanda.
             file_handler= FileHandler(path,idAdapter,self.broker)
             prx_handler=current.adapter.addWithUUID(file_handler)
             return IceFlix.FileServicePrx.uncheckedCast(prx_handler)
 
+
+# El servicio permite que el administrador pueda subir un archivo.
      def uploadFile(self, file_name, uploader, admin_token, current=None):
         
         if not self.authenticator.isAdmin(admin_token):
@@ -90,7 +93,8 @@ class FileServiceI (IceFlix.FileService):
 
         except OSError: #Mirar este except
             raise IceFlix.TemporaryUnavaible
-    
+
+# El servicio permite eliminar un archivo al administrador.
      def deleteFile(self, file_id, admin_token, current=None):
        
         if not self.authenticator.isAdmin(admin_token):
@@ -108,7 +112,12 @@ class FileServiceI (IceFlix.FileService):
 
         logging.info(f"Fichero ---> {file_id} eliminado.")
         self.catalog.MediaCatalog.removedMedia(file_id, servidorId)
+     
+# El servicio permite descargar un archivo a usuarios autenticados.
+     def downloadFile(self, file_id, user_token, current=None):
 
+        return 0
+        
 class FileHandler(IceFlix.FileHandler):
 
     # contador=contador+1
@@ -162,7 +171,7 @@ class FileApp(Ice.Application):
         broker = self.communicator()
         self.adapter = broker.createObjectAdapter("FileService","tcp")
         self.adapter.activate()
-        
+
         self.servant.broker=broker
         self.proxy = self.adapter.addWithUUID(self.servant)
 
@@ -172,6 +181,7 @@ class FileApp(Ice.Application):
         broker.waitForShutdown()
         self.mainProxy.newService(self.proxy,self.serviceId)
 
+# El servicio notifica al catálogo de todos los archivos en su directorio inicial.
         for file in os.listdir("recursos"):
             self.catalog.mediaCatalog.newMedia(sha256(file.encode()).hexdigest(),servidorId)
 
