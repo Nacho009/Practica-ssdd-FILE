@@ -3,14 +3,13 @@
 
 from hashlib import sha256
 import hashlib
-from random import choice
 import sys
 import os
 import logging
 import time
 import uuid
 from main import *
-#Importar catalogo 
+#import catalogo 
 
 import Ice
 
@@ -19,19 +18,21 @@ import IceFlix
 
 CHUNK_SIZE = 4096
 servidorId=uuid.uuid4()
+# contador=0
 
 class FileServiceI (IceFlix.FileService):
 
      def __init__(self,main):
-        self.authenticator= Main.getAuthenticator
+        self.authenticator= Main.getAuthenticator()
         self.main=main
-        # self.catalog= Catalog
+        self.catalog= Main.getCatalog
         self.files={}
         
-        cont=0
+        
+
         for file in os.listdir("recursos"):
-            self.files[cont]=file
-            cont=cont+1
+            self.files[sha256(file.encode()).hexdigest()]=file
+            
 
     #Comprueba si existe ese archivo en el directorio recursos.
 
@@ -43,16 +44,19 @@ class FileServiceI (IceFlix.FileService):
             return False
 
      def openFile(self, file_id, user_token, current=None):
+        path="recursos/"
+        path+=self.files[file_id]
 
-        path=self.files[file_id]
-
+        broker=self.communicator()
+        idAdapter=str(uuid.uuid4())
         if not self.authenticator.isAuthorized(user_token):
             raise IceFlix.Unauthorized()
 
         if not self.exist(file_id):
             raise IceFlix.WrongMediaId()
         else:
-            file_handler= FileHandler(path)
+
+            file_handler= FileHandler(path,idAdapter,broker)
             prx_handler=current.adapter.addWithUUID(file_handler)
             return IceFlix.FileServicePrx.uncheckedCast(prx_handler)
 
@@ -61,6 +65,7 @@ class FileServiceI (IceFlix.FileService):
         if not self.authenticator.isAdmin(admin_token):
             raise IceFlix.Unauthorized()
                 
+        
         index = file_name.rfind("/")
         file_name = file_name[index + 1:]
         destination_file_name = "recursos/" + file_name
@@ -80,7 +85,7 @@ class FileServiceI (IceFlix.FileService):
 
             file.close()
 
-            self.Catalog.mediaCatalog.newMedia(id,servidorId)
+            self.catalog.mediaCatalog.newMedia(id,servidorId)
 
         except OSError: #Mirar este except
             raise IceFlix.TemporaryUnavaible
@@ -101,15 +106,43 @@ class FileServiceI (IceFlix.FileService):
                     break
 
         logging.info(f"Fichero ---> {file_id} eliminado.")
-        self.Catalog.MediaCatalog.removedMedia(file_id, servidorId)
+        self.catalog.MediaCatalog.removedMedia(file_id, servidorId)
 
-class FileHandler():
+class FileHandler(IceFlix.FileHandler):
+
+    # contador=contador+1
+
+    def __init__(self,path,idAdapter,broker):
+        super().__init__()
+
+        self.authenticator= Main.getAuthenticator()
+        self.file_path=path
+        self.bytes=0
+        self.idAdapter=idAdapter
+        self.broker=self.communicator()
+
     def receive(self, size, user_token, current=None):
+
         if not self.authenticator.isAuthorized(user_token):
              raise IceFlix.Unauthorized()
 
-    def close(usertoken):
-        return 0
+        with open(self.file_path,"rb") as out:
+
+            out.seek(self.bytes)
+            leido=out.read(size)
+            self.bytes=self.bytes+size
+
+            return leido
+        
+
+    def close(self, user_token, current=None):
+
+         if not self.authenticator.isAuthorized(user_token):
+             raise IceFlix.Unauthorized()
+
+         adapter= current.adapter
+         adapter.remove(self.broker.StringToIdentify(self.idAdapter))
+
 
 class FileApp(Ice.Application):
 
@@ -120,24 +153,25 @@ class FileApp(Ice.Application):
         self.adapter = None
         self.mainProxy = None
         self.serviceId= servidorId
+        self.catalog=Main.getCatalog
 
     def run(self, args):
         logging.info("Running File application")
 
-        comm = self.communicator()
-        self.adapter = comm.createObjectAdapter("FileService")
+        broker = self.communicator()
+        self.adapter = broker.createObjectAdapter("FileService")
         self.adapter.activate()
 
         self.proxy = self.adapter.addWithUUID(self.servant)
 
-        self.mainProxy= comm.propertyToProxy("Main.Proxy")
+        self.mainProxy= broker.propertyToProxy("Main.Proxy")
 
         self.shutdownOnInterrupt()
-        comm.waitForShutdown()
+        broker.waitForShutdown()
         self.mainProxy.newService(self.proxy,self.serviceId)
 
         for file in os.listdir("recursos"):
-            self.Catalog.mediaCatalog.newMedia(sha256(file.encode()).hexdigest(),servidorId)
+            self.catalog.mediaCatalog.newMedia(sha256(file.encode()).hexdigest(),servidorId)
 
         while True:
             time.sleep(25.0)
