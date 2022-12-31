@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-
 from hashlib import sha256
 import sys
 import os
@@ -38,6 +37,7 @@ class FileServiceI (IceFlix.FileService):
                 if file_id == sha256(file.encode()).hexdigest():
                     return True
             return False
+
 # El servicio permite abrir un archivo existente a un usuario válido.
      def openFile(self, file_id, user_token, current=None):
         path="recursos/"
@@ -177,7 +177,7 @@ class FileApp(Ice.Application):
 # El servicio notifica al catálogo de todos los archivos en su directorio inicial.
         for file in os.listdir("recursos"):
             self.catalog.mediaCatalog.newMedia(sha256(file.encode()).hexdigest(),servidorId)
-            
+
         # while True:
         #     time.sleep(25.0)
         #     self.mainPrx.announce(self.proxy,self.serviceId)
